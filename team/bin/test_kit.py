@@ -4,11 +4,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / ".claude" / "agents"
-NAMES = {"frontend-engineer", "backend-engineer", "test-writer", "reviewer", "launch-engineer", "data-bridge"}
+NAMES = {"planner", "frontend-engineer", "backend-engineer", "test-writer", "reviewer", "launch-engineer", "data-bridge"}
 MODEL_IDS = {"fable": "claude-fable-5-2", "opus": "claude-opus-5-5", "sonnet": "claude-sonnet-5-5"}
 EXPECTED_MODEL = {
+    "planner": "fable",
     "reviewer": "fable",
-    "test-writer": "fable",
+    "test-writer": "opus",
     "frontend-engineer": "opus",
     "backend-engineer": "opus",
     "launch-engineer": "opus",
@@ -131,3 +132,52 @@ class ReviewFixTests(unittest.TestCase):
         _, body = parse(AGENTS / "reviewer.md")
         self.assertIn("FINGERPRINT: <test id> <exception class>", body)
         self.assertIn("TESTS:", body)
+
+
+class EfficiencyRuleTests(unittest.TestCase):
+    """Rules from the 2026-11-17 efficiency pass: plan before tests, size tasks, cheap reruns."""
+
+    def agents(self):
+        return {p.stem: parse(p) for p in AGENTS.glob("*.md")}
+
+    def playbook(self):
+        return parse(ROOT / ".claude" / "skills" / "run-project" / "SKILL.md")[1]
+
+    def test_planner_cannot_edit(self):
+        meta, _ = self.agents()["planner"]
+        tools = {t.strip() for t in meta["tools"].split(",")}
+        self.assertFalse(tools & {"Edit", "Write", "NotebookEdit"})
+
+    def test_planner_output_has_the_plan_sections(self):
+        _, body = self.agents()["planner"]
+        for needle in ("Files", "Rules", "Edge cases", "Decisions needed", "Tests to write", "Track:"):
+            self.assertIn(needle, body)
+
+    def test_playbook_plans_and_sizes_tasks(self):
+        body = self.playbook()
+        for needle in ("planner", "team/plans/T<n>.md", "Small track", "Full track", "Recheck mode", "model: opus"):
+            self.assertIn(needle, body)
+
+    def test_playbook_saves_full_suite_runs(self):
+        body = self.playbook()
+        self.assertIn("full suite once", body)
+        self.assertIn("skip the post-merge suite", body)
+
+    def test_playbook_checks_pull_request_still_open(self):
+        self.assertIn("still open", self.playbook())
+
+    def test_builders_read_the_plan_and_run_the_suite_once(self):
+        agents = self.agents()
+        for name in ("test-writer", "backend-engineer", "frontend-engineer"):
+            body = agents[name][1]
+            self.assertIn("team/plans/", body, name)
+            self.assertIn("full suite once", body, name)
+
+    def test_test_writer_preflights_existing_tests(self):
+        self.assertIn("Pre-flight", self.agents()["test-writer"][1])
+
+    def test_reviewer_has_a_recheck_mode(self):
+        self.assertIn("Recheck mode", self.agents()["reviewer"][1])
+
+    def test_plans_folder_documented(self):
+        self.assertTrue((TEAM / "plans" / "README.md").exists())

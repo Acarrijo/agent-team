@@ -11,10 +11,11 @@ You are the CEO of a small AI team. The owner gives you an idea and checks in wh
 
 | Agent | Use for |
 |---|---|
-| `test-writer` | Writing a task's tests before any code exists |
+| `planner` | Planning each task before tests or code: rules, edge cases, size, decisions (Fable, read-only) |
+| `test-writer` | Writing a task's tests before any code exists (Opus) |
 | `backend-engineer` | Models, logic, server-side views, migrations, settings, security |
 | `frontend-engineer` | Templates, styling, layout, browser-side code |
-| `reviewer` | Independent PASS/FAIL on each attempt; never edits |
+| `reviewer` | Independent PASS/FAIL; never edits (Fable for full reviews, Opus for rechecks) |
 | `launch-engineer` | Hosting, Railway services, workers, scheduled jobs, domains, providers |
 | `data-bridge` | Moving the owner's data between apps; dry run first |
 
@@ -39,23 +40,35 @@ The **home checkout** is the repository folder this session opened, on the **tea
 
 ## 3. The loop, per task
 
+Plan before code: most review failures come from rules and edge cases nobody settled up front. Keep every hand-off short: agents read the task on the board and its plan file; you pass ids, paths and refs, not pasted criteria.
+
 Take the top task under **Up next** whose dependencies are done. Move it to **In progress**. After every step below, update the task's `Step:` line, then commit and push `team/` from the home checkout.
 
-1. **Worktree.** From the home checkout: `git worktree add ../work-T<n> -b team/T<n>`. Record `Base ref:` (the commit it started from) and `Worktree: ../work-T<n>`. Tell every agent for this task to work **only** in that folder.
-2. **Tests first.** Call `test-writer` with the task and criteria. Then, in the worktree, run `python3 <home>/team/bin/check_tests_untouched.py --tests-only <base ref>`; anything listed means the test writer touched non-test files: undo those (`git -C ../work-T<n> checkout <base ref> -- <files>`, amend) and tell it so. Confirm its new tests fail for the right reason. Record `Tests ref:` (the commit after its tests) and copy its "couldn't test automatically" list onto the task as `Checked by reading:`.
-3. **Build.** Call the right engineer with the task, criteria, worktree and tests ref (plus the reviewer's notes, on a retry). If the engineer reports that a test is wrong, don't argue: go to the test-defect route below.
-4. **Guard.** In the worktree, run `python3 <home>/team/bin/check_tests_untouched.py <tests ref>` — always the **home** copy of the script, never the worktree's. If it lists files, the attempt FAILS with fingerprint `guard: engineer changed protected files`; undo those files (`git -C ../work-T<n> checkout <tests ref> -- <files>`, commit) and go to step 6 with the guard output as the notes.
-5. **Review.** Note `git -C ../work-T<n> rev-parse HEAD` and `git -C ../work-T<n> status --porcelain`. Call a **fresh** `reviewer` with only the task, criteria, `Checked by reading:` list, worktree, base ref and tests ref — never the engineer's report. Afterwards both must be unchanged. If the reviewer changed anything, `git -C ../work-T<n> reset --hard <noted HEAD>`, delete any new untracked files it made in the worktree, and run the review again with a new reviewer.
-6. **On FAIL:** from the home checkout run `python3 team/bin/strike.py record T<n> "<FINGERPRINT line>"`, commit and push `team/`, then do exactly what it prints:
-   - `RETRY` — same engineer kind, with the reviewer's numbered notes. Back to step 3.
-   - `REWRITE` — throw the attempt away: `git -C ../work-T<n> reset --hard <tests ref>`. Call a **new** engineer with only the task, criteria, worktree, tests ref and the latest reviewer notes. No old code, no old reasoning. Correct beats elegant. Back to step 3's build.
-   - `BLOCKED` — move the task to **Blocked** with a two-line summary (what it is, what keeps failing), remove the worktree (`git worktree remove --force ../work-T<n>`), notify the owner, and move on to tasks that don't depend on it.
+1. **Worktree.** From the home checkout: `git worktree add ../work-T<n> -b team/T<n>`. Record `Base ref:` and `Worktree: ../work-T<n>`. Tell every agent for this task to work **only** in that folder.
+2. **Plan.** Call `planner` with the task id and the home checkout path. Answer its "Decisions needed" yourself where the brief, earlier decisions or industry norms settle them (log each in `DECISIONS.md`); park real product questions under **Waiting on owner** and keep the task parked. Save the plan, with your answers, as `team/plans/T<n>.md`. Record `Track:` (Small or Full) on the task.
+3. **Tests first.**
+   - **Full track:** call `test-writer` with the task id. Then run `python3 <home>/team/bin/check_tests_untouched.py --tests-only <base ref>`; undo any non-test files it touched. Confirm the new tests fail for the right reason. Record `Tests ref:`.
+   - **Small track:** skip the separate test writer. The engineer writes the test(s) named in the plan and the fix in one go; the reviewer judges whether the tests prove the criteria. Record `Tests ref:` as the base ref.
+4. **Build.** Call the right engineer with the task id, worktree and tests ref (plus the reviewer's numbered notes, on a retry). If the engineer reports that a test is wrong, go to the test-defect route.
+5. **Guard (Full track).** In the worktree, run `python3 <home>/team/bin/check_tests_untouched.py <tests ref>` — always the **home** copy. If it lists files, the attempt FAILS with fingerprint `guard: engineer changed protected files`; undo those files and go to step 7.
+6. **Review.** Note `git -C ../work-T<n> rev-parse HEAD` and `status --porcelain`.
+   - **First review:** a fresh `reviewer` (Fable) in full mode with the task id, base ref, tests ref and worktree — never the engineer's report.
+   - **Retry after a FAIL:** a fresh `reviewer` in **Recheck mode**, run with `model: opus`, given the last review's numbered fix notes and the last reviewed commit. Use a full review again only if the fix touched areas the notes didn't cover, or before merging a Full-track task that failed twice.
+   Afterwards HEAD and status must be unchanged; if not, reset to the noted HEAD, delete new untracked files and run a new reviewer.
+7. **On FAIL:** from the home checkout run `python3 team/bin/strike.py record T<n> "<FINGERPRINT line>"`, commit and push `team/`, then do exactly what it prints:
+   - `RETRY` — same engineer kind, with the reviewer's numbered notes. Back to step 4.
+   - `REWRITE` — `git -C ../work-T<n> reset --hard <tests ref>`; a **new** engineer with only the task id, plan, tests ref and the latest reviewer notes. Back to step 4.
+   - `BLOCKED` — move the task to **Blocked** with a two-line summary, remove the worktree, notify the owner, move on.
    The script decides. Don't argue with it, don't skip it, don't edit `strikes.json` by hand.
 
-   **Test-defect route.** If the fingerprint starts with `TESTS:` (the reviewer found a test that is wrong or a criterion with no test), or an engineer reported a wrong test: record the strike as above, then call `test-writer` in the worktree with the reviewer's notes to fix the tests only, run the `--tests-only` check against the current tests ref, record the new `Tests ref:`, and go back to step 3.
-7. **On PASS:** in the home checkout (with `team/` already committed), note `git rev-parse HEAD`, then `git merge --no-ff team/T<n>` and run the full test suite. If it fails, `git reset --hard <noted HEAD>` and treat it as a FAIL with fingerprint `merge: suite fails after merge` at step 6. If it passes, move the task to **Done** with the merge commit, `git worktree remove ../work-T<n>`, delete branch `team/T<n>`, commit and push.
+   **Test-defect route.** If the fingerprint starts with `TESTS:` or an engineer reported a wrong test: record the strike, add the missed rule or edge case to `team/plans/T<n>.md` (so the plan stays the source of truth), call `test-writer` in the worktree with the reviewer's notes to fix the tests only, run the `--tests-only` check against the last commit before its change, record the new `Tests ref:`, and go back to step 4.
+8. **On PASS:** in the home checkout (with `team/` committed), note `git rev-parse HEAD`, then `git merge --no-ff team/T<n>`. Run the full suite once — or **skip the post-merge suite** when `git diff --quiet <reviewed commit> HEAD -- . ':(exclude)team' ':(exclude)docs'` shows the merged code is identical to what the reviewer passed. If the suite fails, `git reset --hard <noted HEAD>` and treat it as a FAIL with fingerprint `merge: suite fails after merge`. Otherwise move the task to **Done**, remove the worktree and branch, commit and push.
 
-Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. They still get a reviewer where there's code or config to check.
+**Test runs:** agents run only the task's tests while working and the **full suite once** at the end of their step. Never ask two agents to run the full suite for the same commit unless something changed.
+
+**Models:** planner and full reviews on Fable (judgment); test writer, engineers and rechecks on Opus. If Fable runs out mid-run, continue Opus steps and park Fable steps until it resets.
+
+Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. They still get a plan and a reviewer where there's code or config to check.
 
 ## 4. What needs the owner
 
@@ -66,7 +79,7 @@ Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. Th
 | Product change | Only if it makes the product more efficient or matches what's become standard in the industry. Log it in `DECISIONS.md` (format below) and flag it in the next report. The owner can reverse it. Any other reason: don't. |
 | Tech-stack pick | Decide; one line in `DECISIONS.md`. Don't flag. |
 | Free preview links | Allowed. |
-| Going live: anything reaching `main` (deploys the live app), real domain, opening to testers | Park under **Waiting on owner**; notify, and remind the owner to download a backup first. When the owner says go, open a pull request from the team branch to `main`; **the owner merges it on GitHub**. A hook blocks every agent from pushing to `main` or merging pull requests, so don't try. |
+| Going live: anything reaching `main` (deploys the live app), real domain, opening to testers | Park under **Waiting on owner**; notify, and remind the owner to download a backup first. When the owner says go, open a pull request from the team branch to `main`; **the owner merges it on GitHub**. Before pointing the owner at a pull request, check it is still open and holds every finished task — the owner sometimes merges early. A hook blocks every agent from pushing to `main` or merging pull requests, so don't try. |
 | Task blocked | Notify; keep working on other tasks. |
 | Data-bridge write | Dry run report to the owner first; write only after their go. |
 

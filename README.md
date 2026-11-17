@@ -6,15 +6,18 @@ A reusable team of Claude Code agents that takes an idea for a software product 
 
 | Role | Where | Model | Job |
 |---|---|---|---|
-| CEO | `.claude/skills/run-project/SKILL.md` (the main session follows it) | Fable | Plans, delegates, enforces the rules, reports |
-| Test writer | `.claude/agents/test-writer.md` | Fable | Writes a task's tests before any code exists |
+| CEO | `.claude/skills/run-project/SKILL.md` (the main session follows it) | Fable | Delegates, settles decisions, enforces the rules, reports |
+| Planner | `.claude/agents/planner.md` | Fable | Plans each task before any test or code: rules, edge cases, size, decisions (read-only) |
+| Test writer | `.claude/agents/test-writer.md` | Opus | Writes a task's tests from the plan before any code exists |
 | Backend engineer | `.claude/agents/backend-engineer.md` | Opus | Models, logic, migrations, settings, security |
 | Frontend engineer | `.claude/agents/frontend-engineer.md` | Opus | Templates, styling, browser-side code |
-| Reviewer | `.claude/agents/reviewer.md` | Fable | Fresh, read-only, runs the tests itself, PASS/FAIL |
+| Reviewer | `.claude/agents/reviewer.md` | Fable (rechecks on Opus) | Fresh, read-only, runs the tests itself, PASS/FAIL |
 | Launch engineer | `.claude/agents/launch-engineer.md` | Opus | Hosting, workers, scheduled jobs, domains, providers |
 | Data bridge | `.claude/agents/data-bridge.md` | Sonnet | Moves data between apps; always a dry run first |
 
 ## The rules, and what enforces them
+
+- **Plan before code.** A planner pins down each task's rules and edge cases and sizes it (Small or Full track) before any test is written; the plan is saved in `team/plans/`. Small tasks skip the separate test writer; retries get a narrow recheck on Opus; the full test suite runs once per step.
 
 - **Tests first, judged by someone else.** The test writer writes tests from the acceptance criteria; a fresh reviewer who never sees the engineer's explanation runs them and decides.
 - **Engineers can't touch tests or team rules.** `team/bin/check_tests_untouched.py` fails any attempt that changes tests, `team/`, `.claude/`, `CLAUDE.md` or `conftest.py`.

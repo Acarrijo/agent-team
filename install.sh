@@ -14,6 +14,8 @@ cp "$KIT/.claude/skills/run-project/SKILL.md" "$DEST/.claude/skills/run-project/
 cp "$KIT"/team/bin/*.py "$DEST/team/bin/"
 chmod +x "$DEST"/team/bin/strike.py "$DEST"/team/bin/check_tests_untouched.py "$DEST"/team/bin/block_main.py
 
+mkdir -p "$DEST/team/plans"
+[ -e "$DEST/team/plans/README.md" ] || cp "$KIT/team/plans/README.md" "$DEST/team/plans/README.md"
 for f in BRIEF.md BOARD.md DECISIONS.md SPENDING.md README.md; do
   [ -e "$DEST/team/$f" ] || cp "$KIT/team/$f" "$DEST/team/$f"
 done
