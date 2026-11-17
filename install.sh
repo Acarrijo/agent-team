@@ -16,7 +16,7 @@ chmod +x "$DEST"/team/bin/strike.py "$DEST"/team/bin/check_tests_untouched.py "$
 
 mkdir -p "$DEST/team/plans"
 [ -e "$DEST/team/plans/README.md" ] || cp "$KIT/team/plans/README.md" "$DEST/team/plans/README.md"
-for f in BRIEF.md BOARD.md DECISIONS.md SPENDING.md README.md; do
+for f in BRIEF.md BOARD.md DECISIONS.md SPENDING.md README.md INVARIANTS.md DONE.md; do
   [ -e "$DEST/team/$f" ] || cp "$KIT/team/$f" "$DEST/team/$f"
 done
 

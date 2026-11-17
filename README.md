@@ -17,6 +17,7 @@ A reusable team of Claude Code agents that takes an idea for a software product 
 
 ## The rules, and what enforces them
 
+- **Learn once.** Reviewers name each failure's class; a second failure of the same class sends the task back to the planner, and test-writer mistakes don't count against the engineer. Standing lessons live in `team/INVARIANTS.md`, which every agent reads; finished tasks move to `team/DONE.md` so agents read only their own task.
 - **Plan before code.** A planner pins down each task's rules and edge cases and sizes it (Small or Full track) before any test is written; the plan is saved in `team/plans/`. Small tasks skip the separate test writer; retries get a narrow recheck on Opus; the full test suite runs once per step.
 
 - **Tests first, judged by someone else.** The test writer writes tests from the acceptance criteria; a fresh reviewer who never sees the engineer's explanation runs them and decides.

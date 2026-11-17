@@ -25,7 +25,7 @@ When frontend and backend aren't really separate (server-rendered pages, e.g. Dj
 
 The **home checkout** is the repository folder this session opened, on the **team branch** (the branch this session was told to work on; never `main`). `team/` state is only ever edited and committed here. Task work happens in separate worktrees, so resetting a task can never touch the team's state.
 
-1. Read `CLAUDE.md`, then everything in `team/`: `BRIEF.md`, `BOARD.md`, `DECISIONS.md`, `SPENDING.md`, `strikes.json` if present.
+1. Read `CLAUDE.md`, then `team/BOARD.md`, `team/INVARIANTS.md` and `SPENDING.md`; read `BRIEF.md`, `DECISIONS.md` and `team/DONE.md` only when a task needs them.
 2. Run the kit checks: `python3 -m unittest discover -s team/bin -p "test_*.py"`. If anything fails, stop, notify the owner, and do no task work: the rules have drifted.
 3. Look at **Waiting on owner**. If the owner has answered something in the conversation since, record the answer where it belongs (board, decisions, spending, brief approval) and move that item on. If the owner said to retry a blocked task, run `python3 team/bin/strike.py reopen T<n>` and move it back to **Up next**. Unanswered items stay parked; don't stall on them.
 4. Look at **In progress** (a previous run was cut off). For each task there: if its worktree `../work-T<n>` still exists, continue from the `Step:` recorded on the task. If not, the machine was replaced: delete the `team/T<n>` branch if it exists, clear the task's refs and move it back to the top of **Up next**. Its strikes carry over.
@@ -40,33 +40,35 @@ The **home checkout** is the repository folder this session opened, on the **tea
 
 ## 3. The loop, per task
 
-Plan before code: most review failures come from rules and edge cases nobody settled up front. Keep every hand-off short: agents read the task on the board and its plan file; you pass ids, paths and refs, not pasted criteria.
+Plan before code: most review failures come from rules and edge cases nobody settled up front. Keep every hand-off short: agents read only their task's block on the board, its plan file and `team/INVARIANTS.md`; you pass ids, paths and refs, not pasted criteria. Put the test command in each plan's header.
 
 Take the top task under **Up next** whose dependencies are done. Move it to **In progress**. After every step below, update the task's `Step:` line, then commit and push `team/` from the home checkout.
 
 1. **Worktree.** From the home checkout: `git worktree add ../work-T<n> -b team/T<n>`. Record `Base ref:` and `Worktree: ../work-T<n>`. Tell every agent for this task to work **only** in that folder.
-2. **Plan.** Call `planner` with the task id and the home checkout path. Answer its "Decisions needed" yourself where the brief, earlier decisions or industry norms settle them (log each in `DECISIONS.md`); park real product questions under **Waiting on owner** and keep the task parked. Save the plan, with your answers, as `team/plans/T<n>.md`. Record `Track:` (Small or Full) on the task.
+2. **Plan.** Call `planner` (Fable) with the task id and the home checkout path. If it proposes a split, split the task on the board before going on. Answer its "Decisions needed" yourself where the brief, earlier decisions or industry norms settle them (log each in `DECISIONS.md`); park real product questions under **Waiting on owner** and keep the task parked. Save the plan, with your answers, as `team/plans/T<n>.md`. Record `Track:` (Small or Full) on the task.
 3. **Tests first.**
-   - **Full track:** call `test-writer` with the task id. Then run `python3 <home>/team/bin/check_tests_untouched.py --tests-only <base ref>`; undo any non-test files it touched. Confirm the new tests fail for the right reason. Record `Tests ref:`.
+   - **Full track:** call `test-writer` with the task id. Then run `python3 <home>/team/bin/check_tests_untouched.py --tests-only <base ref>`; undo any non-test files it touched. Confirm the new tests fail for the right reason. Record `Tests ref:`. Reject the hand-off (send it back) if its per-test table shows any test failing with an error rather than an assertion, or a test missing the data it needs.
    - **Small track:** skip the separate test writer. The engineer writes the test(s) named in the plan and the fix in one go; the reviewer judges whether the tests prove the criteria. Record `Tests ref:` as the base ref.
 4. **Build.** Call the right engineer with the task id, worktree and tests ref (plus the reviewer's numbered notes, on a retry). If the engineer reports that a test is wrong, go to the test-defect route.
 5. **Guard (Full track).** In the worktree, run `python3 <home>/team/bin/check_tests_untouched.py <tests ref>` — always the **home** copy. If it lists files, the attempt FAILS with fingerprint `guard: engineer changed protected files`; undo those files and go to step 7.
 6. **Review.** Note `git -C ../work-T<n> rev-parse HEAD` and `status --porcelain`.
    - **First review:** a fresh `reviewer` (Fable) in full mode with the task id, base ref, tests ref and worktree — never the engineer's report.
-   - **Retry after a FAIL:** a fresh `reviewer` in **Recheck mode**, run with `model: opus`, given the last review's numbered fix notes and the last reviewed commit. Use a full review again only if the fix touched areas the notes didn't cover, or before merging a Full-track task that failed twice.
+   - **Retry after a FAIL:** a fresh `reviewer` in **Recheck mode**, run with `model: opus` (Fable when the task's failures were money, privacy or security), given the last review's numbered fix notes and the last reviewed commit. Use a full review again only if the fix touched areas the notes didn't cover, or before merging a Full-track task that failed twice.
    Afterwards HEAD and status must be unchanged; if not, reset to the noted HEAD, delete new untracked files and run a new reviewer.
-7. **On FAIL:** from the home checkout run `python3 team/bin/strike.py record T<n> "<FINGERPRINT line>"`, commit and push `team/`, then do exactly what it prints:
+7. **On FAIL:** from the home checkout run `python3 team/bin/strike.py record T<n> "<FINGERPRINT line>" --class <CLASS line>`, add one line to `team/INVARIANTS.md` if the failure teaches something every future task should know, commit and push `team/`, then do exactly what it prints:
    - `RETRY` — same engineer kind, with the reviewer's numbered notes. Back to step 4.
+   - `TESTFIX` — the tests were wrong, not the code: take the test-defect route below. It doesn't count against the engineer.
+   - `REPLAN` — a second failure of the same class (or a third test defect): call the `planner` again with the reviewer's notes to rethink the approach for that class (e.g. mask-by-default instead of chasing patterns), update `team/plans/T<n>.md`, then continue from step 3 with the new rules.
    - `REWRITE` — `git -C ../work-T<n> reset --hard <tests ref>`; a **new** engineer with only the task id, plan, tests ref and the latest reviewer notes. Back to step 4.
    - `BLOCKED` — move the task to **Blocked** with a two-line summary, remove the worktree, notify the owner, move on.
    The script decides. Don't argue with it, don't skip it, don't edit `strikes.json` by hand.
 
    **Test-defect route.** If the fingerprint starts with `TESTS:` or an engineer reported a wrong test: record the strike, add the missed rule or edge case to `team/plans/T<n>.md` (so the plan stays the source of truth), call `test-writer` in the worktree with the reviewer's notes to fix the tests only, run the `--tests-only` check against the last commit before its change, record the new `Tests ref:`, and go back to step 4.
-8. **On PASS:** in the home checkout (with `team/` committed), note `git rev-parse HEAD`, then `git merge --no-ff team/T<n>`. Run the full suite once — or **skip the post-merge suite** when `git diff --quiet <reviewed commit> HEAD -- . ':(exclude)team' ':(exclude)docs'` shows the merged code is identical to what the reviewer passed. If the suite fails, `git reset --hard <noted HEAD>` and treat it as a FAIL with fingerprint `merge: suite fails after merge`. Otherwise move the task to **Done**, remove the worktree and branch, commit and push.
+8. **On PASS:** in the home checkout (with `team/` committed), note `git rev-parse HEAD`, then `git merge --no-ff team/T<n>`. Run the full suite once — or **skip the post-merge suite** when `git diff --quiet <reviewed commit> HEAD -- . ':(exclude)team' ':(exclude)docs'` shows the merged code is identical to what the reviewer passed. If the suite fails, `git reset --hard <noted HEAD>` and treat it as a FAIL with fingerprint `merge: suite fails after merge`. Otherwise replace the task's block on the board with one line in `team/DONE.md` (id, title, merge commit, reviews/failures), remove the worktree and branch, commit and push.
 
 **Test runs:** agents run only the task's tests while working and the **full suite once** at the end of their step. Never ask two agents to run the full suite for the same commit unless something changed.
 
-**Models:** planner and full reviews on Fable (judgment); test writer, engineers and rechecks on Opus. If Fable runs out mid-run, continue Opus steps and park Fable steps until it resets.
+**Models:** planner and first full reviews on Fable (judgment); test writer, engineers and most rechecks on Opus; rechecks after money, privacy or security failures on Fable. If Fable runs out mid-run, continue Opus steps and park Fable steps until it resets.
 
 Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. They still get a plan and a reviewer where there's code or config to check.
 

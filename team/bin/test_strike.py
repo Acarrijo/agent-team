@@ -82,6 +82,41 @@ class StrikeTests(unittest.TestCase):
         self.assertEqual(self.rec("boom"), "RETRY")
         self.assertEqual(len(self.status()["history"]), 7)
 
+    # --- failure classes (2026-11-17 audit) ---
+    def test_second_failure_of_the_same_class_asks_for_a_replan(self):
+        self.assertEqual(strike.record(self.path, "T1", "objection: 3 masking a", "privacy"), "RETRY")
+        self.assertEqual(strike.record(self.path, "T1", "objection: 3 something else", "privacy"), "REPLAN")
+
+    def test_replan_happens_once_per_class_per_cycle(self):
+        strike.record(self.path, "T1", "a", "privacy")
+        strike.record(self.path, "T1", "b", "privacy")
+        self.assertEqual(strike.record(self.path, "T1", "c", "privacy"), "RETRY")
+
+    def test_different_classes_do_not_replan(self):
+        strike.record(self.path, "T1", "a", "privacy")
+        self.assertEqual(strike.record(self.path, "T1", "b", "money"), "RETRY")
+
+    def test_same_fingerprint_three_times_still_rewrites_even_with_a_class(self):
+        out = [strike.record(self.path, "T1", "same", "money") for _ in range(3)]
+        self.assertEqual(out[-1], "REWRITE")
+
+    def test_test_defects_do_not_count_toward_the_engineers_limits(self):
+        for c in "abcde":
+            strike.record(self.path, "T1", f"engineer {c}", c)  # 5 distinct classes
+        self.assertEqual(strike.record(self.path, "T1", "TESTS: 1 wrong"), "TESTFIX")
+        self.assertEqual(self.status()["total"], 5)
+
+    def test_tests_prefix_sets_the_tests_class(self):
+        self.assertEqual(strike.record(self.path, "T1", "TESTS: 2 missing"), "TESTFIX")
+        self.assertEqual(self.status()["tests_total"], 1)
+
+    def test_three_test_defects_ask_for_a_replan(self):
+        self.assertEqual([strike.record(self.path, "T1", f"TESTS: {n} wrong") for n in "abc"], ["TESTFIX", "TESTFIX", "REPLAN"])
+
+    def test_old_records_without_classes_still_load(self):
+        self.path.write_text('{"T1": {"cycle": 1, "total": 1, "state": "open", "counts": {"x": 1}, "history": []}}')
+        self.assertEqual(strike.record(self.path, "T1", "y"), "RETRY")
+
 
 if __name__ == "__main__":
     unittest.main()

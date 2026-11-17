@@ -181,3 +181,48 @@ class EfficiencyRuleTests(unittest.TestCase):
 
     def test_plans_folder_documented(self):
         self.assertTrue((TEAM / "plans" / "README.md").exists())
+
+
+class AuditRuleTests(unittest.TestCase):
+    """Rules from the 2026-11-17 Fable audit."""
+
+    def agents(self):
+        return {p.stem: parse(p) for p in AGENTS.glob("*.md")}
+
+    def playbook(self):
+        return parse(ROOT / ".claude" / "skills" / "run-project" / "SKILL.md")[1]
+
+    def test_invariants_file_exists_and_agents_read_it(self):
+        self.assertTrue((TEAM / "INVARIANTS.md").exists())
+        agents = self.agents()
+        for name in ("planner", "test-writer", "reviewer", "backend-engineer", "frontend-engineer"):
+            self.assertIn("team/INVARIANTS.md", agents[name][1], name)
+
+    def test_reviewer_names_a_failure_class(self):
+        self.assertIn("CLASS:", self.agents()["reviewer"][1])
+
+    def test_playbook_handles_replan_and_testfix_and_classes(self):
+        body = self.playbook()
+        for needle in ("REPLAN", "TESTFIX", "--class", "team/DONE.md", "INVARIANTS.md", "model: opus"):
+            self.assertIn(needle, body)
+
+    def test_agents_read_only_their_task_block(self):
+        for name in ("test-writer", "backend-engineer", "frontend-engineer", "reviewer", "planner"):
+            self.assertIn("only your task", self.agents()[name][1], name)
+
+    def test_test_writer_reports_a_per_test_table(self):
+        body = self.agents()["test-writer"][1]
+        self.assertIn("| Test | Criterion | Fails with | Data it creates |", body)
+        self.assertIn("never an error", body)
+
+    def test_planner_splits_big_tasks_and_lists_test_data(self):
+        body = self.agents()["planner"][1]
+        for needle in ("Split", "Data each test needs", "every on-screen claim", "default-deny"):
+            self.assertIn(needle, body)
+
+    def test_agents_tail_test_output(self):
+        for name in ("test-writer", "backend-engineer", "frontend-engineer", "reviewer"):
+            self.assertIn("tail -15", self.agents()[name][1], name)
+
+    def test_done_archive_exists(self):
+        self.assertTrue((TEAM / "DONE.md").exists())
