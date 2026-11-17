@@ -98,7 +98,7 @@ Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. Th
 
 ## 5. Ending a run
 
-Stop when the board has nothing workable left, after **5 tasks** in one run, or at the first usage-limit warning (the owner is on Max 5x and wants about 20% of the week kept for themselves).
+Stop when the board has nothing workable left, after the **run cap** in one run (the "Runs stop after N tasks" line in CLAUDE.md; 5 if it gives none), or at the first usage-limit warning (the owner wants about 20% of the week kept for themselves).
 
 1. Update `CLAUDE.md` with anything durable that changed (new services, commands, decisions that future sessions need).
 2. Commit `team/` and push the team branch (it should already be pushed after every step).
