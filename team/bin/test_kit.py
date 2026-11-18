@@ -226,3 +226,26 @@ class AuditRuleTests(unittest.TestCase):
 
     def test_done_archive_exists(self):
         self.assertTrue((TEAM / "DONE.md").exists())
+
+
+class MultiProjectTests(unittest.TestCase):
+    """The owner runs the team on several projects at once; they must not collide or blur."""
+
+    def playbook(self):
+        return parse(ROOT / ".claude" / "skills" / "run-project" / "SKILL.md")[1]
+
+    def test_worktrees_carry_the_project_name(self):
+        body = self.playbook()
+        self.assertIn("git worktree add ../<project>-work-T<n>", body)
+        self.assertIn("Worktree: ../<project>-work-T<n>", body)
+        self.assertNotIn("git worktree add ../work-T", body)
+        self.assertNotIn("git -C ../work-T", body)
+
+    def test_resume_trusts_the_recorded_worktree(self):
+        # Tasks started before the rename still have their old folder on the board.
+        self.assertIn("folder on its `Worktree:` line", self.playbook())
+
+    def test_owner_messages_and_schedules_name_the_project(self):
+        body = self.playbook()
+        for needle in ("basename", "`[<project>]`", "`<project>: daily summary`", "`<project>: resume run`"):
+            self.assertIn(needle, body)

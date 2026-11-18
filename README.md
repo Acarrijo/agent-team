@@ -25,6 +25,7 @@ A reusable team of Claude Code agents that takes an idea for a software product 
 - **Three strikes.** `team/bin/strike.py` decides after every failed review: the same failure 3 times → throw the attempt away and start a brand-new engineer; 3 more → blocked and the owner is told; 6 failures in total → blocked.
 - **Nothing goes live without the owner.** `team/bin/block_main.py` is a hook that blocks every agent from pushing to `main` or merging pull requests. Going live = the team opens a pull request, the owner merges it.
 - **Money only within an approved budget** (`team/SPENDING.md`). **Product changes only for efficiency or industry standard**, always logged in `team/DECISIONS.md` and flagged.
+- **Several projects at once.** Install into each project's repository; each keeps its own `team/` state. Worktree folders, notifications, reports and scheduled tasks all carry the project's folder name, so projects never collide or blur.
 - **Memory lives in files**: `CLAUDE.md` and `team/`, so a run survives pauses and new sessions.
 
 Full design: `docs/design.md`.
