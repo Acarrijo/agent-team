@@ -29,7 +29,7 @@ The **project name** is the home checkout's folder name: `basename "$(git rev-pa
 
 1. Read `CLAUDE.md`, then `team/BOARD.md`, `team/INVARIANTS.md` and `SPENDING.md`; read `BRIEF.md`, `DECISIONS.md` and `team/DONE.md` only when a task needs them.
 2. Run the kit checks: `python3 -m unittest discover -s team/bin -p "test_*.py"`. If anything fails, stop, notify the owner, and do no task work: the rules have drifted.
-3. Look at **Waiting on owner**. If the owner has answered something in the conversation since, record the answer where it belongs (board, decisions, spending, brief approval) and move that item on. If the owner said to retry a blocked task, run `python3 team/bin/strike.py reopen T<n>` and move it back to **Up next**. Unanswered items stay parked; don't stall on them.
+3. Look at **Waiting on owner**. If the owner has answered something in the conversation since, record the answer where it belongs (board, decisions, spending, brief approval) and move that item on. If the owner said to retry a blocked task, run `python3 team/bin/strike.py reopen T<n>` and move it back to **Up next**. Unanswered items stay parked; don't stall on them. Record answers to suggestions the same way: **yes** → a task under **Up next** with acceptance criteria; **no** → the suggestion moves to `### Declined`; **later** → it moves to the end of the list. Note each answer with its date under `### Answered`.
 4. Look at **In progress** (a previous run was cut off). For each task there: if the folder on its `Worktree:` line still exists, continue from the `Step:` recorded on the task. If not, the machine was replaced: delete the `team/T<n>` branch if it exists, clear the task's refs and move it back to the top of **Up next**. Its strikes carry over.
 
 ## 2. New project intake (only when `team/BRIEF.md` has no approved brief)
@@ -85,6 +85,7 @@ Infrastructure tasks go to `launch-engineer`; data moves go to `data-bridge`. Th
 | Free preview links | Allowed. |
 | Going live: anything reaching `main` (deploys the live app), real domain, opening to testers | Park under **Waiting on owner**; notify, and remind the owner to download a backup first. When the owner says go, open a pull request from the team branch to `main`; **the owner merges it on GitHub**. Before pointing the owner at a pull request, check it is still open and holds every finished task — the owner sometimes merges early. A hook blocks every agent from pushing to `main` or merging pull requests, so don't try. |
 | Task blocked | Notify; keep working on other tasks. |
+| An idea from the team that isn't in the brief (an improvement, a gap, a follow-up) | Don't build it. Add it, numbered, in plain words, under **Suggestions for the owner** on the board (add that section after **Waiting on owner**, with `### Answered` and `### Declined`, if the board lacks it); the daily summary puts them to the owner one a day. |
 | Any notification or message to the owner | Starts with `[<project>]`, so the owner can tell their projects apart. |
 | Data-bridge write | Dry run report to the owner first; write only after their go. |
 
@@ -107,7 +108,7 @@ Stop when the board has nothing workable left, after the **run cap** in one run 
 2. Commit `team/` and push the team branch (it should already be pushed after every step).
 3. **Report only if eventful** — something finished, blocked, decided, or cost money. Short: done / in progress / blocked / decisions / money spent / waiting on owner. Start the report with `[<project>]`. Send a push notification when something needs the owner's reply; its title starts with `[<project>]` too.
 4. If workable tasks remain, schedule a check-in named `<project>: resume run` that resumes this session in a few hours (after usage resets if you stopped for limits).
-5. Make sure one **daily summary** scheduled task exists for this project, named `<project>: daily summary` (look for that exact name; create it once if missing; another project's summary doesn't count): each day it reads `team/` and reports the board's state in five lines, the first starting with `[<project>]`.
+5. Make sure one **daily summary** scheduled task exists for this project, named `<project>: daily summary` (look for that exact name; create it once if missing; another project's summary doesn't count): each day it reads `team/` and reports the board's state in five lines, the first starting with `[<project>]`, then a **Suggestion of the day**: the first open item under **Suggestions for the owner** on the board, with its number, in plain words, asking the owner yes / no / later. One suggestion per summary; leave the part out when the list is empty. The summary starts no task work.
 
 ## Ground rules
 

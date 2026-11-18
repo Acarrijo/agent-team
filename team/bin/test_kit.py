@@ -249,3 +249,19 @@ class MultiProjectTests(unittest.TestCase):
         body = self.playbook()
         for needle in ("basename", "`[<project>]`", "`<project>: daily summary`", "`<project>: resume run`"):
             self.assertIn(needle, body)
+
+
+class SuggestionTests(unittest.TestCase):
+    """The daily summary puts the team's suggestions to the owner, one a day."""
+
+    def playbook(self):
+        return parse(ROOT / ".claude" / "skills" / "run-project" / "SKILL.md")[1]
+
+    def test_daily_summary_carries_a_suggestion_of_the_day(self):
+        body = self.playbook()
+        for needle in ("Suggestion of the day", "**Suggestions for the owner**", "yes / no / later",
+                       "One suggestion per summary", "### Declined", "### Answered"):
+            self.assertIn(needle, body)
+
+    def test_team_ideas_go_to_the_board_not_into_the_build(self):
+        self.assertIn("Don't build it", self.playbook())

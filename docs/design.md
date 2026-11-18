@@ -176,7 +176,7 @@ Pings and reports arrive in the Claude app (phone notification); the owner repli
 - The reusable kit moves to its own repository, `Acarrijo/agent-team`, once it has worked on UnitBook. Each new project copies from it.
 - New products use a default stack, left only for a logged reason: Django + Postgres + Stripe, hosted on Railway.
 - The team pauses at about 80% of the owner's weekly plan usage.
-- Reporting: a daily summary, plus an end-of-run report when the run was eventful (something finished, blocked, decided or spent). Decisions are pinged immediately. Every ping, report and scheduled task starts with the project's name (its folder name), and task worktrees are named `../<project>-work-T<n>`, so the team can run on several projects at once without mixing them up.
+- Reporting: a daily summary (five lines on the board, then one "suggestion of the day" from the board's Suggestions for the owner, answered yes / no / later), plus an end-of-run report when the run was eventful (something finished, blocked, decided or spent). Decisions are pinged immediately. Every ping, report and scheduled task starts with the project's name (its folder name), and task worktrees are named `../<project>-work-T<n>`, so the team can run on several projects at once without mixing them up.
 - Browser/desktop work runs through the Claude desktop app on the owner's computer.
 
 ## My calls (owner can override)
